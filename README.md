@@ -13,7 +13,7 @@ Setup docker pour projet sf avec les services suivants
 
 - Log into the PHP container
 
-        docker exec -it php8-sf6 bash
+        docker exec -it [Container-name] bash
 
 - Create your Symfony application and launch the internal server
 
