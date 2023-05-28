@@ -34,14 +34,27 @@ services:
         networks:
             - dev
     
-#    mailhog:
-#        image: mailhog/mailhog
-#        container_name: mailhog_docker_symfony
-#        restart: always
-#        ports:
-#            - "1080:8025"
-#        networks:
-#            - dev
+    mailhog:
+        image: mailhog/mailhog
+        container_name: mailhog_docker_symfony
+        restart: unless-stopped
+        ports:
+            - "8082:8025"
+            - "1025:1025"
+        networks:
+            - dev
+                
+    redis-stack:
+        image: redis/redis-stack
+        container_name: redis_stack_docker_symfony
+        restart: unless-stopped
+        ports:
+            - "6379:6379"
+            - "8081:8001"
+        volumes:
+            - redis-data:/data
+        networks: 
+            - dev
     
     www:
         build:
@@ -53,18 +66,19 @@ services:
             - "8000:80"
         volumes:
             - ./:/var/www/app
-#        environment:
-#            PHP_IDE_CONFIG: serverName=localhost
-#            APP_ENV: dev
-#            REDIS_URL: redis://redis
-#            MAILER_DSN: smtp://mail:1025?encryption=null&auth_mode=null
-#            DATABASE_URL: mysql://app:!ChangeMe!@127.0.0.1:3306/app?serverVersion=10.11.2-MariaDB&charset=utf8mb4
-#            MESSENGER_TRANSPORT_DSN: redis://redis:6379/messages
-#            MESSENGER_TRANSPORT_FAILED_DSN: redis://redis:6379/messages_failed
-#        depends_on:
-#            - database
-#            - phpmyadmin
-#            - mailhog
+            - ./docker/php/conf.d/xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini:ro
+        environment:
+            PHP_IDE_CONFIG: serverName=localhost
+            REDIS_HOST: redis-stack
+            REDIS_PORT: ${REDIS_PORT}
+            XDEBUG_MODE: ${XDEBUG_MODE:-off}
+        extra_hosts: 
+            - host.docker.internal:host-gateway # Ensure that host.docker.internal is correctly defined on Linux
+        depends_on:
+            - database
+            - phpmyadmin
+            - mailhog
+            - redis-stack
         networks:
             - dev
 
@@ -73,3 +87,4 @@ networks:
 
 volumes:
     db-data:
+    redis-data:

@@ -86,8 +86,10 @@ FROM app_php as app_php_dev
 
 USER root:root
 
-RUN install-php-extensions xdebug
+ENV XDEBUG_MODE=off
 
-COPY ./docker/php/conf.d/xdebug.ini $PHP_INI_DIR/conf.d/docker-php-ext-xdebug.ini
+COPY ./docker/php/conf.d/xdebug.ini $PHP_INI_DIR/conf.d/xdebug.ini
+
+RUN install-php-extensions xdebug
 
 USER dev:dev
