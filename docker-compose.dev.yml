@@ -11,17 +11,17 @@ services:
         volumes:
             - db-data:/var/lib/mysql
         environment:
-            - MARIADB_USER=root
-            - MARIADB_PASSWORD=secret
-            - MARIADB_ROOT_PASSWORD=secret
-            - MARIADB_DATABASE=symfony
+            - MARIADB_USER=${MARIADB_USER}
+            - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+            - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+            - MARIADB_DATABASE=${MARIADB_DATABASE}
         networks:
             - dev
 
     phpmyadmin:
         image: phpmyadmin
         container_name: phpmyadmin_docker_symfony
-        restart: always
+        restart: unless-stopped
         depends_on:
             - database
         ports:
