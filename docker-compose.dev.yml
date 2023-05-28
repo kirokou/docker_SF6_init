@@ -47,12 +47,11 @@ services:
         build:
             context: .
             dockerfile: Dockerfile
-            target: app_php
+            target: app_php_dev
         container_name: www_docker_symfony
         ports:
             - "8000:80"
         volumes:
-#            - var/www/app/vendor
             - ./:/var/www/app
 #        environment:
 #            PHP_IDE_CONFIG: serverName=localhost
@@ -62,9 +61,9 @@ services:
 #            DATABASE_URL: mysql://app:!ChangeMe!@127.0.0.1:3306/app?serverVersion=10.11.2-MariaDB&charset=utf8mb4
 #            MESSENGER_TRANSPORT_DSN: redis://redis:6379/messages
 #            MESSENGER_TRANSPORT_FAILED_DSN: redis://redis:6379/messages_failed
-        depends_on:
-            - database
-            - phpmyadmin
+#        depends_on:
+#            - database
+#            - phpmyadmin
 #            - mailhog
         networks:
             - dev
