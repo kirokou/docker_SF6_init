@@ -19,7 +19,7 @@ Dockerfile.old
 **/Thumbs.db
 .github/
 docs/
-public/bundles/
+app/public/bundles/
 tests/
 var/
 vendor/

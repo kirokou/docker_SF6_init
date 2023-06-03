@@ -82,6 +82,11 @@ RUN useradd dev -g dev -d /home/dev -m
 RUN echo '%dev ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 USER dev:dev
 
+ARG GIT_MAIL
+ARG GIT_NAME
+RUN git config --global user.email ${GIT_MAIL} \
+ && git config --global user.name ${GIT_NAME}
+
 FROM app_php as app_php_dev
 
 USER root:root

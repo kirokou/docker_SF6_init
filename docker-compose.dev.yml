@@ -4,10 +4,10 @@ services:
     
     database:
         image: mariadb:10.3.38
-        container_name: database_docker_symfony
+        container_name: '${PROJECT_NAME:-app:-app}_database'
         restart: unless-stopped
         ports:
-            - "3306:3306"
+            - "${MARIADB_PORT:-3306}:3306"
         volumes:
             - db-data:/var/lib/mysql
         environment:
@@ -20,12 +20,12 @@ services:
 
     phpmyadmin:
         image: phpmyadmin
-        container_name: phpmyadmin_docker_symfony
+        container_name: '${PROJECT_NAME:-app}_phpmyadmin'
         restart: unless-stopped
         depends_on:
             - database
         ports:
-            - "8080:80"
+            - "8085:80"
         environment:
             - PMA_ARBITRARY=1
             - PMA_HOST=database
@@ -36,55 +36,88 @@ services:
     
     mailhog:
         image: mailhog/mailhog
-        container_name: mailhog_docker_symfony
+        container_name: '${PROJECT_NAME:-app}_mailhog'
         restart: unless-stopped
         ports:
-            - "8082:8025"
+            - "8086:8025"
             - "1025:1025"
         networks:
             - dev
-                
-    redis-stack:
-        image: redis/redis-stack
-        container_name: redis_stack_docker_symfony
-        restart: unless-stopped
-        ports:
-            - "6379:6379"
-            - "8081:8001"
-        volumes:
-            - redis-data:/data
-        networks: 
-            - dev
     
-    www:
+    php:
         build:
             context: .
+            args:
+                - GIT_MAIL=${GIT_MAIL:-"Git Name"}
+                - GIT_NAME=${GIT_NAME:-"johndoe@example.com"}
             dockerfile: Dockerfile
             target: app_php_dev
-        container_name: www_docker_symfony
+        container_name: '${PROJECT_NAME:-app}_php'
         ports:
             - "8000:80"
         volumes:
-            - ./:/var/www/app
+            - ./app:/var/www/app
             - ./docker/php/conf.d/xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini:ro
         environment:
             PHP_IDE_CONFIG: serverName=localhost
             REDIS_HOST: redis-stack
-            REDIS_PORT: ${REDIS_PORT}
+            REDIS_PORT: ${REDIS_PORT:-6379}
             XDEBUG_MODE: ${XDEBUG_MODE:-off}
+            REDIS_URL: redis://redis
+            MAILER_DSN: smtp://mailhog:1025?encryption=null&auth_mode=null
+            MESSENGER_TRANSPORT_DSN: redis://redis:${REDIS_PORT:-6379}/messages
+            MESSENGER_TRANSPORT_FAILED_DSN: redis://redis:${REDIS_PORT:-6379}/messages_failed
+            DATABASE_URL: mysql://${MARIADB_USER:-root}:${MARIADB_PASSWORD:-secret}@database:${MARIADB_PORT:-3306}/symfony?serverVersion=10.3.38-MariaDB&charset=utf8mb4
         extra_hosts: 
             - host.docker.internal:host-gateway # Ensure that host.docker.internal is correctly defined on Linux
         depends_on:
             - database
             - phpmyadmin
             - mailhog
-            - redis-stack
+            - redis
         networks:
             - dev
 
+    redis:
+        image: redis/redis-stack
+        container_name: '${PROJECT_NAME:-app}_redis'
+        restart: unless-stopped
+        ports:
+            - '${REDIS_PORT:-6379}:6379'
+            - "8087:8001"
+        volumes:
+            - redis-data:/data
+        networks:
+            - dev
+                
+    messenger:
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: app_php_dev
+        container_name: '${PROJECT_NAME:-app}_messenger'
+        restart: unless-stopped
+        volumes:
+            - ./app:/var/www/app
+        depends_on:
+            - php
+            - database
+            - redis
+        command: [ 'php', 'bin/console', 'messenger:consume', 'async', '--limit=10', '-vv' ]
+        environment:
+            MESSENGER_TRANSPORT_DSN: 'redis://redis:${REDIS_PORT:-6379}/messages'
+            MESSENGER_TRANSPORT_FAILED_DSN: 'redis://redis:${REDIS_PORT:-6379}/messages_failed'
+        networks:
+            - dev
+
+
 networks:
     dev:
+        driver: bridge
 
 volumes:
     db-data:
+        driver: local
+
     redis-data:
+        driver: local
