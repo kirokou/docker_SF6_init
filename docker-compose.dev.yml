@@ -93,6 +93,9 @@ services:
     messenger:
         build:
             context: .
+            args:
+                - GIT_MAIL=${GIT_MAIL:-"Git Name"}
+                - GIT_NAME=${GIT_NAME:-"johndoe@example.com"}
             dockerfile: Dockerfile
             target: app_php_dev
         container_name: '${PROJECT_NAME:-app}_messenger'
@@ -109,7 +112,27 @@ services:
             MESSENGER_TRANSPORT_FAILED_DSN: 'redis://redis:${REDIS_PORT:-6379}/messages_failed'
         networks:
             - dev
-
+                
+    node:
+        build:
+            context: .
+            args:
+                - GIT_MAIL=${GIT_MAIL:-"Git Name"}
+                - GIT_NAME=${GIT_NAME:-"johndoe@example.com"}
+            dockerfile: Dockerfile
+            target: app_node_dev
+        container_name: '${PROJECT_NAME:-app}_node'
+        volumes:
+            - ./app:/var/www/app
+        working_dir: /var/www/app
+        command: > 
+            sh -c "npm install
+            && npm run watch"
+        ports:
+            - "8080:8080"
+        networks:
+            - dev
+                
 
 networks:
     dev:

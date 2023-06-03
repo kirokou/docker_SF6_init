@@ -67,14 +67,6 @@ ARG WORKDIR=/var/www/app
 
 WORKDIR ${WORKDIR}
 
-#COPY ./composer.* ${WORKDIR}
-
-#RUN composer install --prefer-dist --no-dev --no-scripts --no-progress --no-interaction
-
-#COPY ./ ${WORKDIR}
-
-#RUN composer dump-autoload --optimize
-
 RUN rm -rf /var/www/html
 
 RUN groupadd dev -g 1000
@@ -98,3 +90,11 @@ COPY ./docker/php/conf.d/xdebug.ini $PHP_INI_DIR/conf.d/xdebug.ini
 RUN install-php-extensions xdebug
 
 USER dev:dev
+
+FROM node:lts-alpine as app_node_dev
+
+WORKDIR /var/www/app
+COPY ./app/package*.json ./
+COPY ./app/ .
+
+CMD [ "npm", "install" ]
