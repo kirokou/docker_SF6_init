@@ -4,64 +4,82 @@ services:
     
     database:
         image: mariadb:10.3.38
-        container_name: database_docker_symfony
-        restart: unless-stopped
-        ports:
-            - "3306:3306"
+        container_name: '${PROJECT_NAME:-app:-app}_database'
+        restart: on-failure
         volumes:
             - db-data:/var/lib/mysql
         environment:
-            - MARIADB_USER=root
-            - MARIADB_PASSWORD=secret
-            - MARIADB_ROOT_PASSWORD=secret
-            - MARIADB_DATABASE=symfony
-        networks:
-            - dev
-
-    phpmyadmin:
-        image: phpmyadmin
-        container_name: phpmyadmin_docker_symfony
-        restart: always
-        depends_on:
-            - database
-        ports:
-            - "8080:80"
-        environment:
-            - PMA_ARBITRARY=1
-            - PMA_HOST=database
-            - PMA_USER=root
-            - PMA_PASSWORD=secret
-        networks:
-            - dev
+            - MARIADB_USER=${MARIADB_USER}
+            - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+            - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+            - MARIADB_DATABASE=${MARIADB_DATABASE}
     
     redis:
         image: redis:latest
-        container_name: redis_docker_symfony
+        restart: on-failure
+        container_name: '${PROJECT_NAME:-app:-app}_redis'
     
-    www:
+    php:
         build:
             context: .
+            args:
+                - GIT_MAIL=${GIT_MAIL:-"Git Name"}
+                - GIT_NAME=${GIT_NAME:-"johndoe@example.com"}
             dockerfile: Dockerfile
             target: app_php
-        container_name: www_docker_symfony
+        container_name: '${PROJECT_NAME:-app}_php'
         ports:
             - "8000:80"
         volumes:
-#            - var/www/app/vendor
-            - ./:/var/www/app
+            - ./app:/var/www/app
         environment:
-            REDIS_HOST: redis
-            REDIS_PORT: ${REDIS_PORT}
+            APP_ENV: prod
+            PHP_IDE_CONFIG: serverName=localhost
+            REDIS_HOST: redis-stack
+            REDIS_PORT: ${REDIS_PORT:-6379}
+            REDIS_URL: redis://redis
+            MESSENGER_TRANSPORT_DSN: redis://redis:${REDIS_PORT:-6379}/messages
+            MESSENGER_TRANSPORT_FAILED_DSN: redis://redis:${REDIS_PORT:-6379}/messages_failed
+            DATABASE_URL: mysql://${MARIADB_USER:-root}:${MARIADB_PASSWORD:-secret}@database:${MARIADB_PORT:-3306}/symfony?serverVersion=10.3.38-MariaDB&charset=utf8mb4
         depends_on:
             - database
-            - phpmyadmin
-            - mailhog
             - redis
-        networks:
-            - dev
 
-networks:
-    dev:
+    messenger:
+        build:
+            context: .
+            args:
+                - GIT_MAIL=${GIT_MAIL:-"Git Name"}
+                - GIT_NAME=${GIT_NAME:-"johndoe@example.com"}
+            dockerfile: Dockerfile
+            target: app_php
+        container_name: '${PROJECT_NAME:-app}_messenger'
+        restart: on-failure
+        volumes:
+            - ./app:/var/www/app
+        depends_on:
+            - php
+            - database
+            - redis
+        command: [ 'php', 'bin/console', 'messenger:consume', 'async', '--limit=10', '-vv' ]
+        environment:
+            MESSENGER_TRANSPORT_DSN: 'redis://redis:${REDIS_PORT:-6379}/messages'
+            MESSENGER_TRANSPORT_FAILED_DSN: 'redis://redis:${REDIS_PORT:-6379}/messages_failed'
+
+    node:
+        image: node:lts-alpine
+        container_name: '${PROJECT_NAME:-app}_node'
+        volumes:
+            - ./app:/var/www/app
+        working_dir: /var/www/app
+        depends_on:
+            - php
+            - database
+            - redis
+            - messenger
+        command: >
+            sh -c "npm install
+            && npm run build"
 
 volumes:
     db-data:
