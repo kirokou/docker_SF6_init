@@ -5,7 +5,9 @@ services:
     database:
         image: mariadb:10.3.38
         container_name: '${PROJECT_NAME:-app:-app}_database'
-        restart: on-failure
+        restart: unless-stopped
+        ports:
+            - "${MARIADB_PORT:-3306}:3306"
         volumes:
             - db-data:/var/lib/mysql
         environment:
@@ -13,11 +15,34 @@ services:
             - MARIADB_PASSWORD=${MARIADB_PASSWORD}
             - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
             - MARIADB_DATABASE=${MARIADB_DATABASE}
+        networks:
+            - dev
+
+    phpmyadmin:
+        image: phpmyadmin
+        container_name: '${PROJECT_NAME:-app}_phpmyadmin'
+        restart: unless-stopped
+        depends_on:
+            - database
+        ports:
+            - "8085:80"
+        environment:
+            - PMA_ARBITRARY=1
+            - PMA_HOST=database
+            - PMA_USER=root
+            - PMA_PASSWORD=secret
+        networks:
+            - dev
     
-    redis:
-        image: redis:latest
-        restart: on-failure
-        container_name: '${PROJECT_NAME:-app:-app}_redis'
+    mailhog:
+        image: mailhog/mailhog
+        container_name: '${PROJECT_NAME:-app}_mailhog'
+        restart: unless-stopped
+        ports:
+            - "8086:8025"
+            - "1025:1025"
+        networks:
+            - dev
     
     php:
         build:
@@ -26,25 +51,45 @@ services:
                 - GIT_MAIL=${GIT_MAIL:-"Git Name"}
                 - GIT_NAME=${GIT_NAME:-"johndoe@example.com"}
             dockerfile: Dockerfile
-            target: app_php
+            target: app_php_dev
         container_name: '${PROJECT_NAME:-app}_php'
         ports:
             - "8000:80"
         volumes:
             - ./app:/var/www/app
+            - ./docker/php/conf.d/xdebug.ini:/usr/local/etc/php/conf.d/xdebug.ini:ro
         environment:
-            APP_ENV: prod
             PHP_IDE_CONFIG: serverName=localhost
             REDIS_HOST: redis-stack
             REDIS_PORT: ${REDIS_PORT:-6379}
+            XDEBUG_MODE: ${XDEBUG_MODE:-off}
             REDIS_URL: redis://redis
+            MAILER_DSN: smtp://mailhog:1025?encryption=null&auth_mode=null
             MESSENGER_TRANSPORT_DSN: redis://redis:${REDIS_PORT:-6379}/messages
             MESSENGER_TRANSPORT_FAILED_DSN: redis://redis:${REDIS_PORT:-6379}/messages_failed
             DATABASE_URL: mysql://${MARIADB_USER:-root}:${MARIADB_PASSWORD:-secret}@database:${MARIADB_PORT:-3306}/symfony?serverVersion=10.3.38-MariaDB&charset=utf8mb4
+        extra_hosts: 
+            - host.docker.internal:host-gateway # Ensure that host.docker.internal is correctly defined on Linux
         depends_on:
             - database
+            - phpmyadmin
+            - mailhog
             - redis
+        networks:
+            - dev
 
+    redis:
+        image: redis/redis-stack
+        container_name: '${PROJECT_NAME:-app}_redis'
+        restart: unless-stopped
+        ports:
+            - '${REDIS_PORT:-6379}:6379'
+            - "8087:8001"
+        volumes:
+            - redis-data:/data
+        networks:
+            - dev
+                
     messenger:
         build:
             context: .
@@ -52,9 +97,9 @@ services:
                 - GIT_MAIL=${GIT_MAIL:-"Git Name"}
                 - GIT_NAME=${GIT_NAME:-"johndoe@example.com"}
             dockerfile: Dockerfile
-            target: app_php
+            target: app_php_dev
         container_name: '${PROJECT_NAME:-app}_messenger'
-        restart: on-failure
+        restart: unless-stopped
         volumes:
             - ./app:/var/www/app
         depends_on:
@@ -65,21 +110,37 @@ services:
         environment:
             MESSENGER_TRANSPORT_DSN: 'redis://redis:${REDIS_PORT:-6379}/messages'
             MESSENGER_TRANSPORT_FAILED_DSN: 'redis://redis:${REDIS_PORT:-6379}/messages_failed'
-
+        networks:
+            - dev
+                
     node:
-        image: node:lts-alpine
+        build:
+            context: .
+            args:
+                - GIT_MAIL=${GIT_MAIL:-"Git Name"}
+                - GIT_NAME=${GIT_NAME:-"johndoe@example.com"}
+            dockerfile: Dockerfile
+            target: app_node_dev
         container_name: '${PROJECT_NAME:-app}_node'
         volumes:
             - ./app:/var/www/app
         working_dir: /var/www/app
-        depends_on:
-            - php
-            - database
-            - redis
-            - messenger
-        command: >
+        command: > 
             sh -c "npm install
-            && npm run build"
+            && npm run watch"
+        ports:
+            - "8080:8080"
+        networks:
+            - dev
+                
+
+networks:
+    dev:
+        driver: bridge
 
 volumes:
     db-data:
+        driver: local
+
+    redis-data:
+        driver: local
